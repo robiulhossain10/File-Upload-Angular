@@ -1,9 +1,8 @@
 import { Component } from '@angular/core';
-import {FileInfo, FileService} from "../../service/file.service";
-import {HttpEvent, HttpEventType} from "@angular/common/http";
-import {DecimalPipe, NgClass} from "@angular/common";
+import { FileInfo, FileService } from "../../service/file.service";
+import { HttpEvent, HttpEventType } from "@angular/common/http";
+import { DecimalPipe, NgClass } from "@angular/common";
 import Swal from 'sweetalert2';
-
 
 @Component({
   selector: 'app-file-upload',
@@ -13,44 +12,73 @@ import Swal from 'sweetalert2';
     NgClass
   ],
   templateUrl: './file-upload.component.html',
-  styleUrl: './file-upload.component.scss'
+  styleUrls: ['./file-upload.component.scss'] // ❌ fixed typo: was `styleUrl`
 })
 export class FileUploadComponent {
-  selectedFile: File | null = null;
-  previewUrl: string | null = null;
+  selectedFiles: File[] = []; // ✅ changed from single to multiple
+  previewUrls: string[] = []; // ✅ multiple preview
   files: FileInfo[] = [];
   loading = false;
   uploadProgress = 0;
+  isDragOver = false;
 
   constructor(private fileService: FileService) {}
 
-  /** ✅ File select handler */
+  ngOnInit() {
+    this.loadFiles();
+  }
+
+  // ✅ handle multiple file selection
   onFileSelected(event: Event) {
     const input = event.target as HTMLInputElement;
-    const file = input.files?.[0] ?? null;
-    if (file) {
-      this.selectedFile = file;
-      this.previewUrl = URL.createObjectURL(file);
+    const files = input.files ? Array.from(input.files) : [];
+
+    if (files.length > 0) {
+      this.selectedFiles = files;
+      this.previewUrls = files.map(file => URL.createObjectURL(file));
     } else {
       this.clearSelection();
     }
   }
 
-
-  /** ✅ Clear selected file */
-  clearSelection() {
-    if (this.previewUrl) URL.revokeObjectURL(this.previewUrl);
-    this.selectedFile = null;
-    this.previewUrl = null;
-    this.uploadProgress = 0;
+  // ✅ handle drag & drop for multiple files
+  onDragOver(event: DragEvent) {
+    event.preventDefault();
+    this.isDragOver = true;
   }
 
-  /** ✅ Upload file */
+  onDragLeave(event: DragEvent) {
+    event.preventDefault();
+    this.isDragOver = false;
+  }
+
+  onDrop(event: DragEvent) {
+    event.preventDefault();
+    this.isDragOver = false;
+    const files = event.dataTransfer?.files ? Array.from(event.dataTransfer.files) : [];
+
+    if (files.length > 0) {
+      this.selectedFiles = files;
+      this.previewUrls = files.map(file => URL.createObjectURL(file));
+    }
+  }
+
+  // ✅ clear all selected files & previews
+  clearSelection() {
+    this.previewUrls.forEach(url => URL.revokeObjectURL(url));
+    this.selectedFiles = [];
+    this.previewUrls = [];
+    this.uploadProgress = 0;
+    const input = document.getElementById('fileInput') as HTMLInputElement;
+    if (input) input.value = '';
+  }
+
+  // ✅ multiple upload support
   upload() {
-    if (!this.selectedFile) return;
+    if (!this.selectedFiles || this.selectedFiles.length === 0) return;
 
     const formData = new FormData();
-    formData.append('image', this.selectedFile); // ✅ ঠিক করা হয়েছে
+    this.selectedFiles.forEach(file => formData.append('images', file)); // ✅ must match backend param name
 
     this.loading = true;
     this.uploadProgress = 0;
@@ -67,7 +95,15 @@ export class FileUploadComponent {
           case HttpEventType.Response:
             this.loading = false;
             this.uploadProgress = 100;
-            alert('✅ File uploaded successfully!');
+
+            Swal.fire({
+              title: '✅ Upload Complete',
+              text: `${this.selectedFiles.length} file(s) uploaded successfully!`,
+              icon: 'success',
+              timer: 1500,
+              showConfirmButton: false,
+            });
+
             this.loadFiles();
             this.clearSelection();
             break;
@@ -76,13 +112,18 @@ export class FileUploadComponent {
       error: (err) => {
         this.loading = false;
         console.error('❌ Upload failed:', err);
-        alert('❌ Upload failed! Check backend logs.');
+
+        Swal.fire({
+          title: 'Upload Failed',
+          text: 'Check backend logs or file path permissions.',
+          icon: 'error',
+        });
       },
     });
   }
 
 
-  /** ✅ Fetch uploaded files */
+  // ✅ fetch all files
   loadFiles() {
     this.fileService.getAll().subscribe({
       next: (res) => (this.files = res || []),
@@ -90,6 +131,7 @@ export class FileUploadComponent {
     });
   }
 
+  // ✅ download file
   download(name: string) {
     this.fileService.download(name).subscribe({
       next: (blob: Blob) => {
@@ -104,33 +146,7 @@ export class FileUploadComponent {
     });
   }
 
-
-  ngOnInit() {
-    this.loadFiles();
-  }
-
-  isDragOver = false;
-
-  onDragOver(event: DragEvent) {
-    event.preventDefault();
-    this.isDragOver = true;
-  }
-
-  onDragLeave(event: DragEvent) {
-    event.preventDefault();
-    this.isDragOver = false;
-  }
-
-  onDrop(event: DragEvent) {
-    event.preventDefault();
-    this.isDragOver = false;
-    const file = event.dataTransfer?.files?.[0];
-    if (file) {
-      this.selectedFile = file;
-      this.previewUrl = URL.createObjectURL(file);
-    }
-  }
-
+  // ✅ delete file with confirmation
   deleteFile(id: number) {
     Swal.fire({
       title: '🗑 Delete File?',
@@ -145,9 +161,8 @@ export class FileUploadComponent {
       if (result.isConfirmed) {
         this.fileService.delete(id).subscribe({
           next: (res) => {
-            console.log('Delete success:', res);
             Swal.fire({
-              title: '✅ Deleted!',
+              title: 'Deleted!',
               text: 'File deleted successfully.',
               icon: 'success',
               timer: 1500,
@@ -158,7 +173,7 @@ export class FileUploadComponent {
           error: (err) => {
             console.error('Delete failed:', err);
             Swal.fire({
-              title: '❌ Error',
+              title: 'Error',
               text: 'Could not delete file. Please try again.',
               icon: 'error',
             });
@@ -167,8 +182,4 @@ export class FileUploadComponent {
       }
     });
   }
-
-
-
-
 }

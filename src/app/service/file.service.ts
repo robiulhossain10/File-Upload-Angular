@@ -15,15 +15,16 @@ export class FileService {
 
   constructor(private http: HttpClient) {}
 
-  /** 🔼 Upload file with progress tracking */
+
   upload(data: FormData): Observable<HttpEvent<any>> {
-    return this.http.post<HttpEvent<any>>(`${this.apiUrl}/fileupload`, data, {
+    return this.http.post<any>(`${this.apiUrl}/fileupload`, data, {
       reportProgress: true,
       observe: 'events',
     });
   }
 
-  /** 📂 Get all uploaded files */
+
+
   getAll(): Observable<FileInfo[]> {
     return this.http.get<FileInfo[]>(`${this.apiUrl}`);
   }
